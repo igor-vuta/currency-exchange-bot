@@ -8,7 +8,13 @@
   <img src="https://img.shields.io/badge/Deploy-Heroku%20|%20Railway%20|%20Render-purple" />
 </div>
 
+---
 
+<p align="center">
+  <a href="https://t.me/luxenonbeterris_exchange_bot" target="_blank">
+    <img alt="Open on Telegram" src="https://img.shields.io/badge/Open%20on%20Telegram-@luxenonbeterris__exchange__bot-2CA5E0?logo=telegram&logoColor=white">
+  </a>
+</p>
 
 ---
 
