@@ -1,200 +1,348 @@
-# src/BotMain.py
-import os
 import datetime
-from telegram import Update, ReplyKeyboardMarkup
+from typing import Dict, List, Tuple
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+    ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters, PicklePersistence
 )
 from config import BOT_TOKEN
-from WEBScrappa import (
-    get_exchange_rates, sort_by_code_webscraping,
-    sort_by_definition_webscraping, sort_by_rate_webscraping
-)
-from APIRate import (
-    main_api_rows,
-    sort_by_rate_api, sort_by_currency_code_api, sort_by_currency_name_api
-)
+from WEBScrappa import get_exchange_rates
+from APIRate import table_for_base as api_table_for_base
 
-# ---- i18n ----
 MESSAGES = {
     "en": {
-        "greet": "Hello! How should I address you?",
-        "source_prompt": "Nice to meet you, {name}. What would you like to use?",
-        "menu_web": "Exchange rates – web scraping (CBR)",
-        "menu_api": "Exchange rates – API (Currencylayer)",
-        "sorting_prompt": "Which sorting do you want to apply?",
-        "unknown": "Sorry, I didn’t understand. Please choose one of the options.",
-        "date_rates": "Exchange rates for {date}:",
-        "sort_web_name_asc": "Sort ↑ by name",
-        "sort_web_name_desc": "Sort ↓ by name",
-        "sort_web_code_asc": "Sort ↑ by code",
-        "sort_web_code_desc": "Sort ↓ by code",
-        "sort_web_rate_asc": "Sort ↑ by purchasing power",
-        "sort_web_rate_desc": "Sort ↓ by purchasing power",
-        "sort_api_code_asc": "Sort ↑ by currency code",
-        "sort_api_code_desc": "Sort ↓ by currency code",
-        "sort_api_name_asc": "Sort ↑ by currency name",
-        "sort_api_name_desc": "Sort ↓ by currency name",
-        "sort_api_rate_asc": "Sort ↑ by rate",
-        "sort_api_rate_desc": "Sort ↓ by rate",
-        "lang_switched": "Language switched to English.",
-        "lang_help": "Use /lang ru or /lang en to switch language."
+        "choose_lang": "Choose your language:",
+        "choose_source": "Choose data source:",
+        "choose_base": "Choose your base currency:",
+        "main_menu": "What would you like to do?",
+        "source_web": "CBR (web scraping)",
+        "source_api": "Currencylayer (API)",
+        "act_rate_all": "1 {base} → all",
+        "act_convert": "Convert amount",
+        "settings": "Settings",
+        "settings_title": "Settings",
+        "set_lang": "Language",
+        "set_source": "Data source",
+        "set_base": "Base currency",
+        "back": "← Back",
+        "rates_for": "Rates for 1 {base}:",
+        "sorting": "Sorting:",
+        "sort_code_asc": "Code ↑",
+        "sort_code_desc": "Code ↓",
+        "sort_name_asc": "Name ↑",
+        "sort_name_desc": "Name ↓",
+        "sort_rate_asc": "Rate ↑",
+        "sort_rate_desc": "Rate ↓",
+        "pick_target": "Select target currency:",
+        "enter_amount": "Enter amount (keypad):",
+        "calc_result": "{amt} {base} = {res} {target}",
+        "lang_en": "English",
+        "lang_ru": "Русский",
+        "ok": "OK",
+        "clear": "Clear",
+        "del": "⌫",
+        "page": "Page {n}/{tot}",
+        "unknown": "Please use the buttons below."
     },
     "ru": {
-        "greet": "Здравствуйте, как к вам обращаться?",
-        "source_prompt": "Рад знакомству, {name}. Какой вариант выберете?",
-        "menu_web": "Курсы валют — web-scraping ЦБ",
-        "menu_api": "Курсы валют — API (Currencylayer)",
-        "sorting_prompt": "Какую сортировку хотите применить?",
-        "unknown": "Извините, не понял запрос. Пожалуйста, выберите один из вариантов.",
-        "date_rates": "Курсы валют на {date}:",
-        "sort_web_name_asc": "Сортировка ↑ по названию",
-        "sort_web_name_desc": "Сортировка ↓ по названию",
-        "sort_web_code_asc": "Сортировка ↑ по коду",
-        "sort_web_code_desc": "Сортировка ↓ по коду",
-        "sort_web_rate_asc": "Сортировка ↑ по покупательной способности",
-        "sort_web_rate_desc": "Сортировка ↓ по покупательной способности",
-        "sort_api_code_asc": "Сортировка ↑ по коду валюты",
-        "sort_api_code_desc": "Сортировка ↓ по коду валюты",
-        "sort_api_name_asc": "Сортировка ↑ по названию валюты",
-        "sort_api_name_desc": "Сортировка ↓ по названию валюты",
-        "sort_api_rate_asc": "Сортировка ↑ по курсу",
-        "sort_api_rate_desc": "Сортировка ↓ по курсу",
-        "lang_switched": "Язык переключен на русский.",
-        "lang_help": "Используйте /lang ru или /lang en для смены языка."
+        "choose_lang": "Выберите язык:",
+        "choose_source": "Выберите источник данных:",
+        "choose_base": "Выберите базовую валюту:",
+        "main_menu": "Что вы хотите сделать?",
+        "source_web": "ЦБ РФ (web-scraping)",
+        "source_api": "Currencylayer (API)",
+        "act_rate_all": "1 {base} → все",
+        "act_convert": "Конвертация суммы",
+        "settings": "Настройки",
+        "settings_title": "Настройки",
+        "set_lang": "Язык",
+        "set_source": "Источник данных",
+        "set_base": "Базовая валюта",
+        "back": "← Назад",
+        "rates_for": "Курс для 1 {base}:",
+        "sorting": "Сортировка:",
+        "sort_code_asc": "Код ↑",
+        "sort_code_desc": "Код ↓",
+        "sort_name_asc": "Название ↑",
+        "sort_name_desc": "Название ↓",
+        "sort_rate_asc": "Курс ↑",
+        "sort_rate_desc": "Курс ↓",
+        "pick_target": "Выберите целевую валюту:",
+        "enter_amount": "Введите сумму (клавиатура):",
+        "calc_result": "{amt} {base} = {res} {target}",
+        "lang_en": "English",
+        "lang_ru": "Русский",
+        "ok": "OK",
+        "clear": "Сброс",
+        "del": "⌫",
+        "page": "Стр. {n}/{tot}",
+        "unknown": "Пожалуйста, используйте кнопки ниже."
     }
 }
 
-USER_LANG = {}
+DEFAULT_LANG = "ru"
 
-def tr(user_id: int, key: str) -> str:
-    lang = USER_LANG.get(user_id, "ru")
-    return MESSAGES[lang][key]
+def glang(context: ContextTypes.DEFAULT_TYPE) -> str:
+    return context.user_data.get("lang", DEFAULT_LANG)
 
-USER_NAME_STATE = 1
-EXCHANGE_RATE_STATE = 2
+def tr(context: ContextTypes.DEFAULT_TYPE, key: str, **fmt) -> str:
+    s = MESSAGES[glang(context)][key]
+    return s.format(**fmt) if fmt else s
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    USER_LANG[update.effective_user.id] = USER_LANG.get(update.effective_user.id, "ru")
-    await update.message.reply_text(tr(update.effective_user.id, "greet"))
-    context.user_data["state"] = USER_NAME_STATE
+def set_lang(context: ContextTypes.DEFAULT_TYPE, code: str):
+    context.user_data["lang"] = code
 
-async def set_lang(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.args and context.args[0].lower() in ("ru", "en"):
-        USER_LANG[update.effective_user.id] = context.args[0].lower()
-        await update.message.reply_text(tr(update.effective_user.id, "lang_switched"))
-    else:
-        await update.message.reply_text(tr(update.effective_user.id, "lang_help"))
+def set_source(context: ContextTypes.DEFAULT_TYPE, src: str):
+    context.user_data["source"] = src
 
-async def send_long_message(update, message):
-    for i in range(0, len(message), 4096):
-        await update.message.reply_text(message[i:i+4096])
+def set_base(context: ContextTypes.DEFAULT_TYPE, base: str):
+    context.user_data["base"] = base
 
-async def handle_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.user_data.get("state") == USER_NAME_STATE:
-        user_id = update.effective_user.id
-        user_name = update.message.text
-        context.user_data["name"] = user_name
-        markup = ReplyKeyboardMarkup(
-            [[tr(user_id, "menu_web"), tr(user_id, "menu_api")]],
-            one_time_keyboard=True, resize_keyboard=True
-        )
-        await update.message.reply_text(
-            tr(user_id, "source_prompt").format(name=user_name),
-            reply_markup=markup
-        )
-        context.user_data["state"] = EXCHANGE_RATE_STATE
+def get_source(context: ContextTypes.DEFAULT_TYPE) -> str:
+    return context.user_data.get("source", None)
 
-async def get_rate_from_site(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    rate = sort_by_code_webscraping(get_exchange_rates(), ascending=True)
-    await update.message.reply_text(f"{tr(user_id, 'date_rates').format(date=datetime.date.today())}\n{rate}")
+def get_base(context: ContextTypes.DEFAULT_TYPE) -> str:
+    return context.user_data.get("base", None)
 
-    markup = ReplyKeyboardMarkup(
-        [[tr(user_id,"sort_web_name_asc"), tr(user_id,"sort_web_name_desc")],
-         [tr(user_id,"sort_web_code_asc"), tr(user_id,"sort_web_code_desc")],
-         [tr(user_id,"sort_web_rate_asc"), tr(user_id,"sort_web_rate_desc")]],
-        one_time_keyboard=True, resize_keyboard=True
-    )
-    await update.message.reply_text(tr(user_id, "sorting_prompt"), reply_markup=markup)
-    context.user_data["state"] = "webscraping_sort"
+def cbr_table_for_base(base_code: str) -> List[Tuple[float, str, str]]:
+    data = get_exchange_rates()
+    def rub_per(code: str) -> float:
+        definition, rate, amt = data[code]
+        return rate / float(amt)
+    base_rub = rub_per(base_code)
+    rows: List[Tuple[float, str, str]] = []
+    for code, (definition, rate, amt) in data.items():
+        target_rub = rate / float(amt)
+        rows.append((base_rub / target_rub, code, definition))
+    rows = [(1.0, base_code, data[base_code][0]) if c==base_code else (v,c,n) for (v,c,n) in rows]
+    rows.sort(key=lambda r: r[1])
+    return rows
 
-async def get_rate_from_api(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    rows = main_api_rows()
-    await send_long_message(update, sort_by_rate_api(rows, reverse=True))
+def lang_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton(tr(context, "lang_en"), callback_data="lang:en"),
+                                 InlineKeyboardButton(tr(context, "lang_ru"), callback_data="lang:ru")]])
 
-    markup = ReplyKeyboardMarkup(
-        [[tr(user_id,"sort_api_code_asc"), tr(user_id,"sort_api_code_desc")],
-         [tr(user_id,"sort_api_name_asc"), tr(user_id,"sort_api_name_desc")],
-         [tr(user_id,"sort_api_rate_asc"), tr(user_id,"sort_api_rate_desc")]],
-        one_time_keyboard=True, resize_keyboard=True
-    )
-    await update.message.reply_text(tr(user_id, "sorting_prompt"), reply_markup=markup)
-    context.user_data["state"] = "api_sort"
+def source_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton(tr(context, "source_web"), callback_data="src:web")],
+                                 [InlineKeyboardButton(tr(context, "source_api"), callback_data="src:api")]])
 
-async def handle_rate_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    state = context.user_data.get("state")
+def main_menu_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    base = get_base(context) or "—"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(tr(context, "act_rate_all", base=base), callback_data="act:all")],
+        [InlineKeyboardButton(tr(context, "act_convert"), callback_data="act:convert")],
+        [InlineKeyboardButton(tr(context, "settings"), callback_data="menu:settings")]
+    ])
 
-    if state == USER_NAME_STATE:
-        await handle_name(update, context)
+def settings_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    base = get_base(context) or "—"
+    src = get_source(context) or "—"
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(tr(context,"set_lang"), callback_data="settings:lang"),
+         InlineKeyboardButton(f"{tr(context,'set_source')} ({src})", callback_data="settings:source")],
+        [InlineKeyboardButton(f"{tr(context,'set_base')} ({base})", callback_data="settings:base")],
+        [InlineKeyboardButton(tr(context, "back"), callback_data="menu:main")],
+    ])
 
-    elif state == EXCHANGE_RATE_STATE:
-        if update.message.text == tr(user_id, "menu_web"):
-            await get_rate_from_site(update, context)
-        elif update.message.text == tr(user_id, "menu_api"):
-            await get_rate_from_api(update, context)
+def codes_list() -> List[str]:
+    data = get_exchange_rates()
+    return sorted(set(list(data.keys()) + ["USD","EUR","RUB","GBP","CNY","JPY","KZT","UAH"]))
+
+def paged_codes_kb(context: ContextTypes.DEFAULT_TYPE, action_prefix: str, page: int = 0, per_page: int = 12) -> InlineKeyboardMarkup:
+    codes = codes_list()
+    total_pages = (len(codes)+per_page-1)//per_page
+    page = max(0, min(page, total_pages-1))
+    start = page*per_page
+    chunk = codes[start:start+per_page]
+    rows = []
+    for i in range(0, len(chunk), 3):
+        rows.append([InlineKeyboardButton(code, callback_data=f"{action_prefix}:pick:{code}") for code in chunk[i:i+3]])
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("‹", callback_data=f"{action_prefix}:page:{page-1}"))
+    nav.append(InlineKeyboardButton(tr(context, "page", n=page+1, tot=total_pages), callback_data="noop"))
+    if page < total_pages-1:
+        nav.append(InlineKeyboardButton("›", callback_data=f"{action_prefix}:page:{page+1}"))
+    rows.append(nav)
+    rows.append([InlineKeyboardButton(tr(context, "back"), callback_data="menu:main")])
+    return InlineKeyboardMarkup(rows)
+
+def sorting_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(tr(context,"sort_code_asc"),  callback_data="sort:code:asc"),
+         InlineKeyboardButton(tr(context,"sort_code_desc"), callback_data="sort:code:desc")],
+        [InlineKeyboardButton(tr(context,"sort_name_asc"),  callback_data="sort:name:asc"),
+         InlineKeyboardButton(tr(context,"sort_name_desc"), callback_data="sort:name:desc")],
+        [InlineKeyboardButton(tr(context,"sort_rate_asc"),  callback_data="sort:rate:asc"),
+         InlineKeyboardButton(tr(context,"sort_rate_desc"), callback_data="sort:rate:desc")],
+        [InlineKeyboardButton(tr(context, "back"), callback_data="menu:main")]
+    ])
+
+def numpad_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("7", callback_data="pad:7"), InlineKeyboardButton("8", callback_data="pad:8"), InlineKeyboardButton("9", callback_data="pad:9")],
+        [InlineKeyboardButton("4", callback_data="pad:4"), InlineKeyboardButton("5", callback_data="pad:5"), InlineKeyboardButton("6", callback_data="pad:6")],
+        [InlineKeyboardButton("1", callback_data="pad:1"), InlineKeyboardButton("2", callback_data="pad:2"), InlineKeyboardButton("3", callback_data="pad:3")],
+        [InlineKeyboardButton("0", callback_data="pad:0"), InlineKeyboardButton(".", callback_data="pad:."), InlineKeyboardButton(tr(context, "del"), callback_data="pad:del")],
+        [InlineKeyboardButton(tr(context, "clear"), callback_data="pad:clear"), InlineKeyboardButton(tr(context, "ok"), callback_data="pad:ok")],
+        [InlineKeyboardButton(tr(context, "back"), callback_data="menu:main")]
+    ])
+
+def format_table(rows: List[Tuple[float,str,str]], header: str) -> str:
+    lines = [header, "", f"{'RATE (per 1 base)':>19} | {'CODE':<5} | NAME", "-"*55]
+    for amt, code, name in rows[:80]:
+        lines.append(f"{amt:19.6f} | {code:<5} | {name}")
+    return "```\n" + "\n".join(lines) + "\n```"
+
+def sort_rows(rows: List[Tuple[float,str,str]], sort_key: str, asc: bool) -> List[Tuple[float,str,str]]:
+    keyfn = (lambda r: r[1]) if sort_key=="code" else ((lambda r: r[2]) if sort_key=="name" else (lambda r: r[0]))
+    return sorted(rows, key=keyfn, reverse=not asc)
+
+async def send_md(update_or_query, text: str):
+    MAX = 3800
+    parts, buf = [], ""
+    for line in text.splitlines(True):
+        if len(buf)+len(line) > MAX:
+            parts.append(buf)
+            buf = ""
+        buf += line
+    if buf:
+        parts.append(buf)
+    for chunk in parts:
+        if not chunk.startswith("```"):
+            chunk = "```\n"+chunk
+        if not chunk.rstrip().endswith("```"):
+            chunk = chunk.rstrip()+"\n```"
+        if hasattr(update_or_query, "message") and update_or_query.message:
+            await update_or_query.message.reply_text(chunk, parse_mode="Markdown")
         else:
-            await default_response(update, context)
+            await update_or_query.edit_message_text(chunk, parse_mode="Markdown")
 
-    elif state == "webscraping_sort":
-        txt = update.message.text
-        if txt == tr(user_id,"sort_web_name_asc"):
-            await send_long_message(update, sort_by_definition_webscraping(get_exchange_rates(), ascending=True))
-        elif txt == tr(user_id,"sort_web_name_desc"):
-            await send_long_message(update, sort_by_definition_webscraping(get_exchange_rates(), ascending=False))
-        elif txt == tr(user_id,"sort_web_code_asc"):
-            await send_long_message(update, sort_by_code_webscraping(get_exchange_rates(), ascending=True))
-        elif txt == tr(user_id,"sort_web_code_desc"):
-            await send_long_message(update, sort_by_code_webscraping(get_exchange_rates(), ascending=False))
-        elif txt == tr(user_id,"sort_web_rate_asc"):
-            await send_long_message(update, sort_by_rate_webscraping(get_exchange_rates(), ascending=True))
-        elif txt == tr(user_id,"sort_web_rate_desc"):
-            await send_long_message(update, sort_by_rate_webscraping(get_exchange_rates(), ascending=False))
-
-    elif state == "api_sort":
-        txt = update.message.text
-        rows = main_api_rows()
-        if txt == tr(user_id,"sort_api_code_asc"):
-            await send_long_message(update, sort_by_currency_code_api(rows, reverse=False))
-        elif txt == tr(user_id,"sort_api_code_desc"):
-            await send_long_message(update, sort_by_currency_code_api(rows, reverse=True))
-        elif txt == tr(user_id,"sort_api_name_asc"):
-            await send_long_message(update, sort_by_currency_name_api(rows, reverse=False))
-        elif txt == tr(user_id,"sort_api_name_desc"):
-            await send_long_message(update, sort_by_currency_name_api(rows, reverse=True))
-        elif txt == tr(user_id,"sort_api_rate_asc"):
-            await send_long_message(update, sort_by_rate_api(rows, reverse=False))
-        elif txt == tr(user_id,"sort_api_rate_desc"):
-            await send_long_message(update, sort_by_rate_api(rows, reverse=True))
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if "lang" not in context.user_data:
+        await update.message.reply_text(tr(context, "choose_lang"), reply_markup=lang_kb(context))
+    elif "source" not in context.user_data:
+        await update.message.reply_text(tr(context, "choose_source"), reply_markup=source_kb(context))
+    elif "base" not in context.user_data:
+        await update.message.reply_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
     else:
-        await default_response(update, context)
+        await update.message.reply_text(tr(context, "main_menu"), reply_markup=main_menu_kb(context))
 
-async def default_response(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.effective_user.id
-    markup = ReplyKeyboardMarkup(
-        [[tr(user_id, "menu_web"), tr(user_id, "menu_api")]],
-        one_time_keyboard=True, resize_keyboard=True
-    )
-    await update.message.reply_text(tr(user_id, "unknown"), reply_markup=markup)
-    context.user_data["state"] = EXCHANGE_RATE_STATE
+async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(tr(context, "unknown"), reply_markup=main_menu_kb(context))
+
+async def on_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    data = q.data
+    if data.startswith("lang:"):
+        set_lang(context, data.split(":")[1])
+        await q.edit_message_text(tr(context, "choose_source"), reply_markup=source_kb(context))
+        return
+    if data.startswith("src:"):
+        set_source(context, data.split(":")[1])
+        await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
+        return
+    if data.startswith("base:page:"):
+        page = int(data.split(":")[2])
+        await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", page))
+        return
+    if data.startswith("base:pick:"):
+        base = data.split(":")[2]
+        set_base(context, base)
+        await q.edit_message_text(tr(context, "main_menu"), reply_markup=main_menu_kb(context))
+        return
+    if data == "menu:settings":
+        await q.edit_message_text(tr(context, "settings_title"), reply_markup=settings_kb(context))
+        return
+    if data == "menu:main":
+        await q.edit_message_text(tr(context, "main_menu"), reply_markup=main_menu_kb(context))
+        return
+    if data == "settings:lang":
+        await q.edit_message_text(tr(context, "choose_lang"), reply_markup=lang_kb(context))
+        return
+    if data == "settings:source":
+        await q.edit_message_text(tr(context, "choose_source"), reply_markup=source_kb(context))
+        return
+    if data == "settings:base":
+        await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
+        return
+    if data == "act:all":
+        await show_all_rates(q, context, sort_key="code", asc=True)
+        return
+    if data == "act:convert":
+        await q.edit_message_text(tr(context, "pick_target"), reply_markup=paged_codes_kb(context, "target", 0))
+        return
+    if data.startswith("target:page:"):
+        page = int(data.split(":")[2])
+        await q.edit_message_text(tr(context, "pick_target"), reply_markup=paged_codes_kb(context, "target", page))
+        return
+    if data.startswith("target:pick:"):
+        context.user_data["target"] = data.split(":")[2]
+        context.user_data["calc_input"] = ""
+        await q.edit_message_text(tr(context, "enter_amount"), reply_markup=numpad_kb(context))
+        return
+    if data.startswith("sort:"):
+        _, key, order = data.split(":")
+        await show_all_rates(q, context, sort_key=key, asc=(order=="asc"))
+        return
+    if data.startswith("pad:"):
+        cmd = data.split(":")[1]
+        buf = context.user_data.get("calc_input", "")
+        if cmd == "ok":
+            await finalize_conversion(q, context)
+            return
+        if cmd == "clear":
+            buf = ""
+        elif cmd == "del":
+            buf = buf[:-1]
+        else:
+            if not (cmd == "." and "." in buf):
+                buf += cmd
+        context.user_data["calc_input"] = buf
+        await q.edit_message_text(f"{tr(context,'enter_amount')}\n`{buf or '0'}`", parse_mode="Markdown", reply_markup=numpad_kb(context))
+        return
+
+def get_rows_for_current(context: ContextTypes.DEFAULT_TYPE) -> List[Tuple[float,str,str]]:
+    base = get_base(context)
+    src = get_source(context)
+    return api_table_for_base(base) if src == "api" else cbr_table_for_base(base)
+
+async def show_all_rates(q, context, sort_key: str, asc: bool):
+    rows = sort_rows(get_rows_for_current(context), sort_key, asc)
+    base = get_base(context)
+    header = tr(context, "rates_for", base=base)
+    table = format_table(rows, header)
+    try:
+        await q.edit_message_text(table, parse_mode="Markdown", reply_markup=sorting_kb(context))
+    except Exception:
+        await send_md(q, table)
+        await q.message.reply_text(tr(context, "sorting"), reply_markup=sorting_kb(context))
+
+async def finalize_conversion(q, context):
+    base = get_base(context)
+    target = context.user_data.get("target")
+    amount_str = context.user_data.get("calc_input") or "0"
+    try:
+        amt = float(amount_str)
+    except ValueError:
+        amt = 0.0
+    rows = get_rows_for_current(context)
+    rate_map: Dict[str, float] = {code: val for (val, code, _name) in rows}
+    rate = rate_map.get(target)
+    if rate is None:
+        await q.edit_message_text(tr(context, "unknown"), reply_markup=main_menu_kb(context))
+        return
+    res = amt * rate
+    msg = tr(context, "calc_result", amt=amt, base=base, res=f"{res:.6f}", target=target)
+    await q.edit_message_text(f"```\n{msg}\n```", parse_mode="Markdown", reply_markup=main_menu_kb(context))
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    persistence = PicklePersistence(filepath="bot_state.pickle")
+    app = ApplicationBuilder().token(BOT_TOKEN).persistence(persistence).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("lang", set_lang)) 
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rate_selection))
+    app.add_handler(CallbackQueryHandler(on_cb))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.run_polling()
 
 if __name__ == "__main__":

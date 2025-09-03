@@ -1,219 +1,96 @@
-## 🤖 Exchange Rate Bot (Telegram)
+## 🤖 Currency Exchange Bot
 
 <div align="center">
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/python--telegram--bot-21.x-2CA5E0?logo=telegram&logoColor=white" />
-  <img src="https://img.shields.io/badge/HTTP-httpx/requests-000000" />
-  <img src="https://img.shields.io/badge/HTML-BeautifulSoup4-1f6feb" />
-  <img src="https://img.shields.io/badge/Deployment-Heroku-purple" />
+  <img src="https://img.shields.io/badge/Telegram-bot-2CA5E0?logo=telegram&logoColor=white" />
+  <img src="https://img.shields.io/badge/Scraping-BeautifulSoup4-1f6feb" />
+  <img src="https://img.shields.io/badge/API-currencylayer-000000" />
+  <img src="https://img.shields.io/badge/Deploy-Heroku%20|%20Railway%20|%20Render-purple" />
 </div>
 
 
 
 ---
 
-## A production‑ready Telegram bot that provides real‑time currency exchange rates from two sources:
-	-	🌐 Currencylayer API (live market quotes)
-	-	🏦 Central Bank of Russia (official daily rates via web‑scraping)
+## A clean, button‑only Telegram bot for currency rates and conversions. New users pick language → source → base currency, then choose between:
+	-	1 BASE → all — view a well‑formatted table of rates for 1 base currency against all others (sortable).
+	-	Convert amount — pick a target and enter an amount using an on‑screen numeric keypad (no typing).
 
-Users can browse, sort, and search rates with a friendly chat flow and Telegram keyboards.
-
-Try the bot: @ExchangeRateBotProviderBot (update in this README if your handle changes)
+Everything is persistent: language, data source (CBR/API), and base currency are saved and editable in Settings.
 
 ---
 
-## ✨ Features
-	-	⚡ Live rates via Currencylayer
-	-	🏦 Official CBR rates via BeautifulSoup scraping
-	-	🔎 Sorting & filtering: by rate, currency code, or currency name
-	-	🧭 Guided UX with Telegram reply/inline keyboards
-	-	🌍 Multi‑language ready (current prompts in Russian)
-	-	🧪 Simple to run locally; Heroku‑friendly (Procfile & runtime.txt included)
+## ✨ Highlights
+	-	🧭 Onboarding flow: Language → Source (CBR/API) → Base currency (paginated list)
+	-	🧮 Calculator: keypad input, precise conversion, result in monospace
+	-	📊 Tables: aligned monospace output with sorting (code/name/rate)
+	-	💾 Persistence: user preferences survive bot restarts (PicklePersistence)
+	-	🔐 Secure config: .env for BOT_TOKEN, CURRENCYLAYER_API_KEY
+	-	🚀 Deployable anywhere: Heroku/Railway/Render or any VPS
 
 ---
 
-## 🗂 Project Structure
+## 🗂 Structure
 
-currencyExchange/
-├── .env.example           # Example of required environment variables (do NOT commit real secrets)
-├── Procfile               # Heroku entrypoint
-├── README.md              # You are here
-├── requirements.txt       # Python dependencies
-├── runtime.txt            # Heroku Python runtime
-└── src/
-    ├── APIRate.py         # Currencylayer fetching & currency metadata
-    ├── WEBScrappa.py      # Central Bank scraper (BeautifulSoup)
-    └── BotMain.py         # Telegram bot flow & handlers
+src/
+  APIRate.py     # currencylayer cross‑rates for arbitrary base
+  BotMain.py     # button‑only flow, i18n, persistence, calculator
+  WEBScrappa.py  # CBR rates via BeautifulSoup
+  config.py      # loads secrets from .env
+requirements.txt
+Procfile | runtime.txt (optional for Heroku)
 
 
 ---
 
-## ⚙️ Tech Stack
+## ⚙️ Setup
 
-Area	Tools
-Bot	python-telegram-bot 21.x
-HTTP	requests, httpx
-Scraping	BeautifulSoup4
-Runtime	Python 3.11+
-Deploy	Heroku (Procfile), or any VM/Container
-
-
----
-
-## 🚀 Quick Start (Local)
-	1.	Clone & enter the project
-
-git clone <your-new-repo-url> currency-exchange-bot
-cd currency-exchange-bot
-
-	2.	Create & activate venv (recommended)
-
-python3 -m venv .venv
-source ./.venv/bin/activate   # Windows: .\.venv\Scripts\activate
-
-	3.	Install dependencies
-
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-	4.	Configure environment
-Create a .env file (copy from .env.example) and set:
-
-BOT_TOKEN=your_telegram_bot_token
-CURRENCYLAYER_API_KEY=your_currencylayer_key
-
-## 🔐 Security tip: The repo you uploaded had hard‑coded keys. Move all secrets into .env and rotate any exposed tokens.
-
-	5.	Run the bot
-
+cp .env.example .env   # then fill values
 python src/BotMain.py
 
+.env
+
+BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
+CURRENCYLAYER_API_KEY=YOUR_CURRENCYLAYER_API_KEY
+
 
 ---
 
-## ☁️ Deploy (Heroku)
-
-Heroku files are already present. Minimal flow:
-
-# Create app
-heroku create your-bot-name
-
-# Set environment variables
-heroku config:set BOT_TOKEN=... CURRENCYLAYER_API_KEY=...
-
-# Push code
-git push heroku main
-
-# View logs
-heroku logs --tail
-
-Alternative: run on Render, Railway, Fly.io, or a Dockerized VPS. The entrypoint is python src/BotMain.py.
-
----
-
-## 🧭 Bot Commands & UX
-	-	/start — greet user & show main menu
-	-	Get exchange rates — choose between Currencylayer live rates or CBR official daily rates
-	-	Sorting — sort by currency code/name or by numeric rate
-	-	Navigation — reply keyboards guide users back/forth safely
-
-Current prompts are in Russian. You can translate messages in BotMain.py to support EN/RU.
-
----
-
-## 🔌 Integrations
-
-Currencylayer
-	-	Endpoint: http://api.currencylayer.com/live
-	-	Auth: access_key param
-	-	Notes: Free tier updates hourly; HTTPS on paid tiers. Respect API limits.
-
-Central Bank of Russia (CBR)
-	-	Scraped HTML table via BeautifulSoup.
-	-	Be mindful of structure changes; handle missing/renamed columns gracefully.
-
----
-
-## 🧱 Architecture (high‑level)
-
-[User]
-  ⬇︎ Telegram
-[python-telegram-bot]
-  ⬇︎ handlers
-[BotMain.py] ── calls ──> [APIRate.py]  (Currencylayer)
-                 └──────> [WEBScrappa.py] (CBR scraper)
-
-	-	BotMain.py manages state & conversation flow using ApplicationBuilder.
-	-	APIRate.py fetches live quotes & holds a currency code → human name mapping.
-	-	WEBScrappa.py scrapes the CBR table and normalizes rates.
-
----
-
-## 🧹 Code Quality & Hardening Checklist
-	-	Move API keys to .env (BOT_TOKEN, CURRENCYLAYER_API_KEY)
-	-	Use HTTPS for Currencylayer if your plan allows
-	-	Add retries/timeouts to HTTP requests (httpx/requests)
-	-	Validate API responses & handle rate‑limits
-	-	Exception logging around network/scraping calls
-	-	Dockerfile (optional) for reproducible deploys
+## 🧪 Try it
+	1.	/start → choose language
+	2.	Choose source: CBR or currencylayer
+	3.	Choose base currency (paginated)
+	4.	Main menu:
+	-	1 BASE → all → view & sort table
+	-	Convert amount → pick target → keypad → OK
+	-	Settings → change language/source/base
 
 ---
 
 ## 🖼 Screenshots
 
-Add real Telegram chat screenshots here (PNG/JPEG):
+Place images in docs/screenshots/ and reference here:
 
-/docs/screenshots/
-  01-start.png
-  02-source-selection.png
-  03-cbr-rates.png
-  04-currencylayer-rates.png
-  05-sorting.png
-
-Sample Markdown in this README:
-
-![Start](docs/screenshots/01-start.png)
-![Source selection](docs/screenshots/02-source-selection.png)
+![Onboarding](docs/screenshots/01-onboarding.png)
+![Table](docs/screenshots/02-table.png)
+![Calculator](docs/screenshots/03-calculator.png)
 
 
 ---
 
-## 🔐 Environment Variables
-
-Name	Required	Example
-BOT_TOKEN	✅	123456:ABCDEF...
-CURRENCYLAYER_API_KEY	✅	abcd1234...
-
-Remove any hard‑coded keys from APIRate.py and replace with os.getenv("CURRENCYLAYER_API_KEY").
-
----
-
-## 📦 Requirements
-
-From requirements.txt (pinned): python-telegram-bot, requests, httpx, beautifulsoup4, etc. Use:
-
-pip install -r requirements.txt
-
+## 🔐 Notes
+	-	Rotate any previously exposed keys/tokens.
+	-	Respect currencylayer free‑tier limitations.
+	-	Scraper may require maintenance if CBR markup changes.
 
 ---
 
 ## 📜 License
 
-Choose a license (e.g., MIT) and add a LICENSE file. Example badge:
+[GNU Affero General Public License v3 (AGPLv3)](https://www.gnu.org/licenses/agpl-3.0.html)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-
----
-
-🏁 Repush Plan (Option A: squash)
-
-# from a fresh working copy of the project
-rm -rf .git
-git init
-git add .
-git commit -S -m "chore: initial import"
-git branch -M main
-git remote add origin git@github.com:<new-user>/<new-repo>.git
-git push -u origin main
-
-After pushing: upload screenshots, update this README with your actual bot handle, and rotate any tokens that were ever committed.
+- ✅ Share and showcase code freely.
+- ✅ Others may learn and contribute.
+- ❌ No one can take it private, build a SaaS on top, and profit without open-sourcing their changes.
