@@ -1,12 +1,10 @@
-# src/APIRate.py
 import requests
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 from config import CURRENCYLAYER_API_KEY
 
+BASE_URL = "https://api.currencylayer.com/live"
 
-BASE_URL = "https://api.currencylayer.com/live" 
-
-currency_names = {
+currency_names: Dict[str, str] = {
       "AED": "Дирхам ОАЭ",
     "AFN": "Афгани",
     "ALL": "Албанский лек",
@@ -179,56 +177,32 @@ currency_names = {
     "ZWL": "Зимбабвийский доллар"
 }
 
-def fetch_live_quotes() -> dict:
-    """Return raw JSON from currencylayer or raise a helpful error."""
-    try:
-        resp = requests.get(
-            BASE_URL,
-            params={"access_key": CURRENCYLAYER_API_KEY},
-            timeout=10
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        if not data.get("success", False):
-            raise RuntimeError(f"Currencylayer error: {data.get('error', {}).get('info')}")
-        return data
-    except Exception as e:
-        raise RuntimeError(f"Failed to fetch currencylayer quotes: {e}")
+def fetch_usd_quotes() -> Dict[str, float]:
+    r = requests.get(BASE_URL, params={"access_key": CURRENCYLAYER_API_KEY}, timeout=10)
+    r.raise_for_status()
+    d = r.json()
+    if not d.get("success"):
+        raise RuntimeError(d.get("error", {}).get("info"))
+    return d["quotes"]
 
-def build_rub_based_table(data: dict) -> List[Tuple[float, str, str]]:
-    """
-    Returns a list of tuples: [(rate_in_target_per_100_RUB, target_code, human_name), ...]
-    """
-    quotes = data["quotes"] 
-    usd_to_rub = quotes.get("USDRUB")
-    if not usd_to_rub:
-        raise RuntimeError("USDRUB not present in quotes; cannot convert from RUB base")
+def derive_cross_rates(base_code: str) -> Dict[str, float]:
+    q = fetch_usd_quotes()
+    usd_to_base = q.get(f"USD{base_code}")
+    if not usd_to_base:
+        raise RuntimeError(f"USD{base_code} not present")
+    cross: Dict[str, float] = {}
+    for pair, usd_to_target in q.items():
+        if pair.startswith("USD"):
+            target = pair[3:]
+            cross[target] = usd_to_target / usd_to_base
+    cross[base_code] = 1.0
+    return cross
 
-    table = []
-    for pair, usd_to_code in quotes.items():
-        if not pair.startswith("USD"):
-            continue
-        target = pair[3:]
-        human = currency_names.get(target, target)
-        code_per_100_rub = (100 / usd_to_rub) * usd_to_code
-        table.append((code_per_100_rub, target, human))
-    return table
+def label(code: str) -> str:
+    return currency_names.get(code, code)
 
-def sort_by_rate_api(rows: List[Tuple[float, str, str]], reverse=False) -> str:
-    return format_exchange_rates(sorted(rows, key=lambda x: x[0], reverse=reverse))
-
-def sort_by_currency_code_api(rows: List[Tuple[float, str, str]], reverse=False) -> str:
-    return format_exchange_rates(sorted(rows, key=lambda x: x[1], reverse=reverse))
-
-def sort_by_currency_name_api(rows: List[Tuple[float, str, str]], reverse=False) -> str:
-    return format_exchange_rates(sorted(rows, key=lambda x: x[2], reverse=reverse))
-
-def format_exchange_rates(sorted_rows) -> str:
-    lines = ["За 100 российских рублей вы сможете купить:"]
-    for amount, code, name in sorted_rows:
-        lines.append(f"{amount:.2f} {code} - {name}")
-    return "\n".join(lines)
-
-def main_api_rows() -> List[Tuple[float, str, str]]:
-    data = fetch_live_quotes()
-    return build_rub_based_table(data)
+def table_for_base(base_code: str) -> List[Tuple[float, str, str]]:
+    cross = derive_cross_rates(base_code)
+    rows: List[Tuple[float, str, str]] = [(amt, code, label(code)) for code, amt in cross.items()]
+    rows.sort(key=lambda r: r[1])
+    return rows
