@@ -1,13 +1,22 @@
-import datetime
+import logging
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Tuple
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters, PicklePersistence
+    ContextTypes, filters
 )
-from config import BOT_TOKEN
-from WEBScrappa import get_exchange_rates
+
 from APIRate import table_for_base as api_table_for_base
+from config import BOT_TOKEN, REDIS_URL
+from exceptions import ExchangeRateError
+from persistence import RedisPersistence
+from WEBScrappa import get_exchange_rates
+
+logger = logging.getLogger(__name__)
 
 MESSAGES = {
     "en": {
@@ -42,7 +51,9 @@ MESSAGES = {
         "clear": "Clear",
         "del": "⌫",
         "page": "Page {n}/{tot}",
-        "unknown": "Please use the buttons below."
+        "unknown": "Please use the buttons below.",
+        "rate_error": "Couldn't fetch rates. Please try again in a moment.",
+        "generic_error": "Something went wrong. Please try again."
     },
     "ru": {
         "choose_lang": "Выберите язык:",
@@ -76,7 +87,9 @@ MESSAGES = {
         "clear": "Сброс",
         "del": "⌫",
         "page": "Стр. {n}/{tot}",
-        "unknown": "Пожалуйста, используйте кнопки ниже."
+        "unknown": "Пожалуйста, используйте кнопки ниже.",
+        "rate_error": "Не удалось получить курсы. Попробуйте ещё раз через минуту.",
+        "generic_error": "Что-то пошло не так. Попробуйте ещё раз."
     }
 }
 
@@ -231,77 +244,129 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(tr(context, "unknown"), reply_markup=main_menu_kb(context))
 
-async def on_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
+def _query(update: Update):
+    return update.callback_query
+
+
+async def handle_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
     await q.answer()
-    data = q.data
-    if data.startswith("lang:"):
-        set_lang(context, data.split(":")[1])
-        await q.edit_message_text(tr(context, "choose_source"), reply_markup=source_kb(context))
+    set_lang(context, q.data.split(":")[1])
+    await q.edit_message_text(tr(context, "choose_source"), reply_markup=source_kb(context))
+
+
+async def handle_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    set_source(context, q.data.split(":")[1])
+    await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
+
+
+async def handle_base_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    page = int(q.data.split(":")[2])
+    await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", page))
+
+
+async def handle_base_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    base = q.data.split(":")[2]
+    set_base(context, base)
+    await q.edit_message_text(tr(context, "main_menu"), reply_markup=main_menu_kb(context))
+
+
+async def handle_menu_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    await q.edit_message_text(tr(context, "settings_title"), reply_markup=settings_kb(context))
+
+
+async def handle_menu_main(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    await q.edit_message_text(tr(context, "main_menu"), reply_markup=main_menu_kb(context))
+
+
+async def handle_settings_lang(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    await q.edit_message_text(tr(context, "choose_lang"), reply_markup=lang_kb(context))
+
+
+async def handle_settings_source(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    await q.edit_message_text(tr(context, "choose_source"), reply_markup=source_kb(context))
+
+
+async def handle_settings_base(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
+
+
+async def handle_act_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    await show_all_rates(q, context, sort_key="code", asc=True)
+
+
+async def handle_act_convert(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    await q.edit_message_text(tr(context, "pick_target"), reply_markup=paged_codes_kb(context, "target", 0))
+
+
+async def handle_target_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    page = int(q.data.split(":")[2])
+    await q.edit_message_text(tr(context, "pick_target"), reply_markup=paged_codes_kb(context, "target", page))
+
+
+async def handle_target_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    context.user_data["target"] = q.data.split(":")[2]
+    context.user_data["calc_input"] = ""
+    await q.edit_message_text(tr(context, "enter_amount"), reply_markup=numpad_kb(context))
+
+
+async def handle_sort(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    _, key, order = q.data.split(":")
+    await show_all_rates(q, context, sort_key=key, asc=(order == "asc"))
+
+
+async def handle_pad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
+    cmd = q.data.split(":")[1]
+    buf = context.user_data.get("calc_input", "")
+    if cmd == "ok":
+        await finalize_conversion(q, context)
         return
-    if data.startswith("src:"):
-        set_source(context, data.split(":")[1])
-        await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
-        return
-    if data.startswith("base:page:"):
-        page = int(data.split(":")[2])
-        await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", page))
-        return
-    if data.startswith("base:pick:"):
-        base = data.split(":")[2]
-        set_base(context, base)
-        await q.edit_message_text(tr(context, "main_menu"), reply_markup=main_menu_kb(context))
-        return
-    if data == "menu:settings":
-        await q.edit_message_text(tr(context, "settings_title"), reply_markup=settings_kb(context))
-        return
-    if data == "menu:main":
-        await q.edit_message_text(tr(context, "main_menu"), reply_markup=main_menu_kb(context))
-        return
-    if data == "settings:lang":
-        await q.edit_message_text(tr(context, "choose_lang"), reply_markup=lang_kb(context))
-        return
-    if data == "settings:source":
-        await q.edit_message_text(tr(context, "choose_source"), reply_markup=source_kb(context))
-        return
-    if data == "settings:base":
-        await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
-        return
-    if data == "act:all":
-        await show_all_rates(q, context, sort_key="code", asc=True)
-        return
-    if data == "act:convert":
-        await q.edit_message_text(tr(context, "pick_target"), reply_markup=paged_codes_kb(context, "target", 0))
-        return
-    if data.startswith("target:page:"):
-        page = int(data.split(":")[2])
-        await q.edit_message_text(tr(context, "pick_target"), reply_markup=paged_codes_kb(context, "target", page))
-        return
-    if data.startswith("target:pick:"):
-        context.user_data["target"] = data.split(":")[2]
-        context.user_data["calc_input"] = ""
-        await q.edit_message_text(tr(context, "enter_amount"), reply_markup=numpad_kb(context))
-        return
-    if data.startswith("sort:"):
-        _, key, order = data.split(":")
-        await show_all_rates(q, context, sort_key=key, asc=(order=="asc"))
-        return
-    if data.startswith("pad:"):
-        cmd = data.split(":")[1]
-        buf = context.user_data.get("calc_input", "")
-        if cmd == "ok":
-            await finalize_conversion(q, context)
-            return
-        if cmd == "clear":
-            buf = ""
-        elif cmd == "del":
-            buf = buf[:-1]
-        else:
-            if not (cmd == "." and "." in buf):
-                buf += cmd
-        context.user_data["calc_input"] = buf
-        await q.edit_message_text(f"{tr(context,'enter_amount')}\n`{buf or '0'}`", parse_mode="Markdown", reply_markup=numpad_kb(context))
-        return
+    if cmd == "clear":
+        buf = ""
+    elif cmd == "del":
+        buf = buf[:-1]
+    else:
+        if not (cmd == "." and "." in buf):
+            buf += cmd
+    context.user_data["calc_input"] = buf
+    await q.edit_message_text(
+        f"{tr(context, 'enter_amount')}\n`{buf or '0'}`",
+        parse_mode="Markdown",
+        reply_markup=numpad_kb(context),
+    )
+
+
+async def handle_noop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = _query(update)
+    await q.answer()
 
 def get_rows_for_current(context: ContextTypes.DEFAULT_TYPE) -> List[Tuple[float,str,str]]:
     base = get_base(context)
@@ -309,8 +374,13 @@ def get_rows_for_current(context: ContextTypes.DEFAULT_TYPE) -> List[Tuple[float
     return api_table_for_base(base) if src == "api" else cbr_table_for_base(base)
 
 async def show_all_rates(q, context, sort_key: str, asc: bool):
-    rows = sort_rows(get_rows_for_current(context), sort_key, asc)
     base = get_base(context)
+    try:
+        rows = sort_rows(get_rows_for_current(context), sort_key, asc)
+    except ExchangeRateError as exc:
+        logger.warning("Failed to load rates for /all: %s", exc)
+        await q.edit_message_text(tr(context, "rate_error"), reply_markup=main_menu_kb(context))
+        return
     header = tr(context, "rates_for", base=base)
     table = format_table(rows, header)
     try:
@@ -327,7 +397,12 @@ async def finalize_conversion(q, context):
         amt = float(amount_str)
     except ValueError:
         amt = 0.0
-    rows = get_rows_for_current(context)
+    try:
+        rows = get_rows_for_current(context)
+    except ExchangeRateError as exc:
+        logger.warning("Failed to load rates for conversion: %s", exc)
+        await q.edit_message_text(tr(context, "rate_error"), reply_markup=main_menu_kb(context))
+        return
     rate_map: Dict[str, float] = {code: val for (val, code, _name) in rows}
     rate = rate_map.get(target)
     if rate is None:
@@ -337,13 +412,78 @@ async def finalize_conversion(q, context):
     msg = tr(context, "calc_result", amt=amt, base=base, res=f"{res:.6f}", target=target)
     await q.edit_message_text(f"```\n{msg}\n```", parse_mode="Markdown", reply_markup=main_menu_kb(context))
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Unhandled exception: %s", context.error, exc_info=context.error)
+    if isinstance(update, Update) and update.effective_message:
+        await update.effective_message.reply_text(tr(context, "generic_error"))
+
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def log_message(self, fmt: str, *args) -> None:
+        logger.debug(fmt, *args)
+
+    def do_GET(self) -> None:
+        if self.path == "/health":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"status":"ok"}')
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+
+def start_health_server(host: str = "0.0.0.0", port: int = 8080) -> HTTPServer:
+    server = HTTPServer((host, port), HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info("Health server listening on http://%s:%s/health", host, port)
+    return server
+
+
+def setup_logging() -> None:
+    level = os.getenv("LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=level,
+    )
+
+
+def build_application():
+    persistence = RedisPersistence(url=REDIS_URL, key_prefix="currency_bot")
+    return ApplicationBuilder().token(BOT_TOKEN).persistence(persistence).build()
+
+
 def main():
-    persistence = PicklePersistence(filepath="bot_state.pickle")
-    app = ApplicationBuilder().token(BOT_TOKEN).persistence(persistence).build()
+    setup_logging()
+    health_port = int(os.getenv("PORT", "8080"))
+    start_health_server(port=health_port)
+    app = build_application()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(on_cb))
+
+    # Callback routing by prefix/pattern instead of a single mega-router.
+    app.add_handler(CallbackQueryHandler(handle_lang, pattern=r"^lang:"))
+    app.add_handler(CallbackQueryHandler(handle_source, pattern=r"^src:"))
+    app.add_handler(CallbackQueryHandler(handle_base_page, pattern=r"^base:page:"))
+    app.add_handler(CallbackQueryHandler(handle_base_pick, pattern=r"^base:pick:"))
+    app.add_handler(CallbackQueryHandler(handle_target_page, pattern=r"^target:page:"))
+    app.add_handler(CallbackQueryHandler(handle_target_pick, pattern=r"^target:pick:"))
+    app.add_handler(CallbackQueryHandler(handle_sort, pattern=r"^sort:"))
+    app.add_handler(CallbackQueryHandler(handle_pad, pattern=r"^pad:"))
+    app.add_handler(CallbackQueryHandler(handle_menu_settings, pattern=r"^menu:settings$"))
+    app.add_handler(CallbackQueryHandler(handle_menu_main, pattern=r"^menu:main$"))
+    app.add_handler(CallbackQueryHandler(handle_settings_lang, pattern=r"^settings:lang$"))
+    app.add_handler(CallbackQueryHandler(handle_settings_source, pattern=r"^settings:source$"))
+    app.add_handler(CallbackQueryHandler(handle_settings_base, pattern=r"^settings:base$"))
+    app.add_handler(CallbackQueryHandler(handle_act_all, pattern=r"^act:all$"))
+    app.add_handler(CallbackQueryHandler(handle_act_convert, pattern=r"^act:convert$"))
+    app.add_handler(CallbackQueryHandler(handle_noop, pattern=r"^noop$"))
+
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+    app.add_error_handler(error_handler)
+    logger.info("Starting bot in polling mode")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
