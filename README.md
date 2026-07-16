@@ -1,95 +1,113 @@
-## 🤖 Currency Exchange Bot
-
 <div align="center">
-  <img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white" />
-  <img src="https://img.shields.io/badge/Telegram-bot-2CA5E0?logo=telegram&logoColor=white" />
-  <img src="https://img.shields.io/badge/Scraping-BeautifulSoup4-1f6feb" />
-  <img src="https://img.shields.io/badge/API-currencylayer-000000" />
-  <img src="https://img.shields.io/badge/Deploy-Heroku%20|%20Railway%20|%20Render-purple" />
+
+# 🤖 Currency Exchange Bot
+
+**A button-only Telegram bot for live currency rates and conversions — no typing, no commands to memorise.**
+
+<img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white" />
+<img src="https://img.shields.io/badge/python--telegram--bot-persistence-2CA5E0?logo=telegram&logoColor=white" />
+<img src="https://img.shields.io/badge/Scraping-BeautifulSoup4-1f6feb" />
+<img src="https://img.shields.io/badge/API-currencylayer-000000" />
+<img src="https://img.shields.io/badge/Deploy-Heroku%20|%20Railway%20|%20Render-purple" />
+
+<br />
+
+### ⚡ Try it right now — no setup
+
+[![Open in Telegram](https://img.shields.io/badge/%F0%9F%9A%80%20Live%20demo-@currenvy__bot__for__demo__bot-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/currenvy_bot_for_demo_bot)
+
+*Press Start, pick a language, and you're converting currencies in under 15 seconds.*
+
 </div>
 
 ---
 
-<p align="center">
-  <a href="https://t.me/luxenonbeterris_exchange_bot" target="_blank">
-    <img alt="Open on Telegram" src="https://img.shields.io/badge/Open%20on%20Telegram-@luxenonbeterris__exchange__bot-2CA5E0?logo=telegram&logoColor=white">
-  </a>
-</p>
+## What it does
 
----
+New users walk through a friendly onboarding: **language → data source → base currency**, then land in a two-button main menu:
 
-## A clean, button‑only Telegram bot for currency rates and conversions. New users pick language → source → base currency, then choose between:
-	-	1 BASE → all — view a well‑formatted table of rates for 1 base currency against all others (sortable).
-	-	Convert amount — pick a target and enter an amount using an on‑screen numeric keypad (no typing).
+- **1 BASE → all** — a clean, monospace-aligned table of your base currency against every other, sortable by code, name, or rate.
+- **Convert amount** — pick a target currency and enter the amount on an inline numeric keypad. No free-text input anywhere.
 
-Everything is persistent: language, data source (CBR/API), and base currency are saved and editable in Settings.
+```
+┌──────────────────────────────┐
+│  💱 1 USD → all              │
+│                              │
+│  EUR   European Euro   0.92  │
+│  GBP   British Pound   0.78  │
+│  KZT   Kazakh Tenge  478.11  │
+│  RUB   Russian Ruble  87.45  │
+│  ...                         │
+│                              │
+│  [Sort: rate ▾]  [⚙ Settings]│
+└──────────────────────────────┘
+```
+
+Everything is **persistent**: language, data source (CBR / currencylayer API), and base currency survive bot restarts and are editable any time in Settings.
 
 ---
 
 ## ✨ Highlights
-	-	🧭 Onboarding flow: Language → Source (CBR/API) → Base currency (paginated list)
-	-	🧮 Calculator: keypad input, precise conversion, result in monospace
-	-	📊 Tables: aligned monospace output with sorting (code/name/rate)
-	-	💾 Persistence: user preferences survive bot restarts (PicklePersistence)
-	-	🔐 Secure config: .env for BOT_TOKEN, CURRENCYLAYER_API_KEY
-	-	🚀 Deployable anywhere: Heroku/Railway/Render or any VPS
+
+- 🧭 **Zero-typing UX** — the entire flow runs on inline buttons, including a numeric keypad calculator
+- 🌍 **Multilingual** — English / Russian interface, switchable on the fly
+- 🔀 **Dual data sources** — Central Bank of Russia (scraped with BeautifulSoup) or currencylayer API cross-rates, user's choice
+- 📊 **Readable tables** — aligned monospace output with sorting (code / name / rate)
+- 💾 **Persistence** — user preferences stored via `PicklePersistence`, no database required
+- 🔐 **Secure config** — secrets in `.env` (`BOT_TOKEN`, `CURRENCYLAYER_API_KEY`), never in code
+- 🚀 **Deploy anywhere** — Heroku / Railway / Render / any VPS; `Procfile` included
 
 ---
 
 ## 🗂 Structure
 
+```
 src/
-  APIRate.py     # currencylayer cross‑rates for arbitrary base
-  BotMain.py     # button‑only flow, i18n, persistence, calculator
+  APIRate.py     # currencylayer cross-rates for an arbitrary base
+  BotMain.py     # button-only flow, i18n, persistence, keypad calculator
   WEBScrappa.py  # CBR rates via BeautifulSoup
   config.py      # loads secrets from .env
 requirements.txt
-Procfile | runtime.txt (optional for Heroku)
-
+Procfile | runtime.txt   # optional, for Heroku-style deploys
+```
 
 ---
 
-## ⚙️ Setup
+## ⚙️ Run your own instance
 
+```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # then fill values
+cp .env.example .env   # fill in your tokens
 python src/BotMain.py
+```
 
-.env
+`.env`:
 
+```env
 BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 CURRENCYLAYER_API_KEY=YOUR_CURRENCYLAYER_API_KEY
-
-
----
-
-## 🧪 Try it
-	1.	/start → choose language
-	2.	Choose source: CBR or currencylayer
-	3.	Choose base currency (paginated)
-	4.	Main menu:
-	-	1 BASE → all → view & sort table
-	-	Convert amount → pick target → keypad → OK
-	-	Settings → change language/source/base
+```
 
 ---
 
-## 🖼 Screenshots
+## 🧪 The flow
 
-Place images in docs/screenshots/ and reference here:
-
-![Onboarding](docs/screenshots/01-onboarding.png)
-![Table](docs/screenshots/02-table.png)
-![Calculator](docs/screenshots/03-calculator.png)
-
+1. `/start` → choose language
+2. Choose source: **CBR** or **currencylayer**
+3. Choose base currency (paginated list)
+4. Main menu:
+   - **1 BASE → all** → view & sort the table
+   - **Convert amount** → pick target → keypad → OK
+   - **Settings** → change language / source / base at any time
 
 ---
 
 ## 🔐 Notes
-	-	Rotate any previously exposed keys/tokens.
-	-	Respect currencylayer free‑tier limitations.
-	-	Scraper may require maintenance if CBR markup changes.
+
+- Rotate any previously exposed keys or tokens.
+- Respect currencylayer free-tier limits.
+- The CBR scraper may need maintenance if the bank's markup changes.
 
 ---
 
@@ -100,3 +118,11 @@ Place images in docs/screenshots/ and reference here:
 - ✅ Share and showcase code freely.
 - ✅ Others may learn and contribute.
 - ❌ No one can take it private, build a SaaS on top, and profit without open-sourcing their changes.
+
+---
+
+<div align="center">
+
+Built by **[Igor Vuta](https://github.com/igor-vuta)** · [Portfolio](https://igor-vuta.github.io/portfolio/) · [LinkedIn](https://www.linkedin.com/in/igor-vuta-b88017390)
+
+</div>
