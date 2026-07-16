@@ -13,7 +13,7 @@ from telegram.ext import (
 from APIRate import label as APIRate_label, table_for_base as api_table_for_base
 from config import BOT_TOKEN, CURRENCYLAYER_API_KEY, REDIS_URL, validate as validate_config
 from exceptions import ExchangeRateError
-from persistence import RedisPersistence
+from persistence import build_persistence
 from WEBScrappa import get_exchange_rates
 
 logger = logging.getLogger(__name__)
@@ -490,10 +490,15 @@ def setup_logging() -> None:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=level,
     )
+    # Quiet down very noisy libraries unless debugging.
+    if level != "DEBUG":
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("telegram.ext.Application").setLevel(logging.WARNING)
+        logging.getLogger("telegram.ext.Updater").setLevel(logging.WARNING)
 
 
 def build_application():
-    persistence = RedisPersistence(url=REDIS_URL, key_prefix="currency_bot")
+    persistence = build_persistence(url=REDIS_URL, key_prefix="currency_bot")
     return ApplicationBuilder().token(BOT_TOKEN).persistence(persistence).build()
 
 

@@ -7,7 +7,7 @@ from copy import deepcopy
 from typing import Any, Dict, Optional, Tuple, Union
 
 import redis
-from telegram.ext import BasePersistence, PersistenceInput
+from telegram.ext import BasePersistence, DictPersistence, PersistenceInput
 
 logger = logging.getLogger(__name__)
 
@@ -170,3 +170,47 @@ class RedisPersistence(BasePersistence[UD, CD, BD]):
     async def flush(self) -> None:
         # Data is written immediately; nothing extra to flush.
         pass
+
+
+def _is_hosted() -> bool:
+    return bool(
+        os.getenv("PORT")
+        or os.getenv("RAILWAY_ENVIRONMENT")
+        or os.getenv("RAILWAY_SERVICE_NAME")
+        or os.getenv("RENDER")
+        or os.getenv("HEROKU_APP_ID")
+    )
+
+
+def build_persistence(
+    url: Optional[str] = None,
+    key_prefix: str = "currency_bot",
+    store_data: Optional[PersistenceInput] = None,
+    update_interval: float = 60,
+):
+    """Return Redis persistence when available, otherwise in-memory DictPersistence."""
+    url = url or os.getenv("REDIS_URL")
+    if not url:
+        logger.info("REDIS_URL not set; using in-memory persistence.")
+        return DictPersistence()
+
+    if _is_hosted() and ("localhost" in url or "127.0.0.1" in url):
+        logger.warning(
+            "REDIS_URL points to localhost in a hosted environment; "
+            "using in-memory persistence."
+        )
+        return DictPersistence()
+
+    try:
+        client = redis.from_url(url, decode_responses=True)
+        client.ping()
+        logger.info("Using Redis persistence.")
+        return RedisPersistence(
+            url=url,
+            key_prefix=key_prefix,
+            store_data=store_data,
+            update_interval=update_interval,
+        )
+    except redis.RedisError as exc:
+        logger.warning("Redis unavailable (%s); using in-memory persistence.", exc)
+        return DictPersistence()

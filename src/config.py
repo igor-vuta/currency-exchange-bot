@@ -6,7 +6,7 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CURRENCYLAYER_API_KEY = os.getenv("CURRENCYLAYER_API_KEY")
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.getenv("REDIS_URL")
 
 
 def validate() -> None:

@@ -24,7 +24,14 @@ class RateCache:
         self.url = url or os.getenv("REDIS_URL")
         self._memory: dict[str, tuple[float, Any]] = {}
         self._redis: Optional[redis.Redis] = None
-        if self.url:
+        hosted = bool(
+            os.getenv("PORT")
+            or os.getenv("RAILWAY_ENVIRONMENT")
+            or os.getenv("RAILWAY_SERVICE_NAME")
+            or os.getenv("RENDER")
+            or os.getenv("HEROKU_APP_ID")
+        )
+        if self.url and not (hosted and ("localhost" in self.url or "127.0.0.1" in self.url)):
             try:
                 self._redis = redis.from_url(self.url, decode_responses=True)
                 self._redis.ping()
@@ -32,6 +39,11 @@ class RateCache:
             except redis.RedisError as exc:
                 logger.warning("Redis cache unavailable, using in-memory fallback: %s", exc)
                 self._redis = None
+        elif self.url and hosted:
+            logger.warning(
+                "REDIS_URL points to localhost in a hosted environment; "
+                "using in-memory cache."
+            )
 
     def _redis_key(self, key: str) -> str:
         return f"currency_bot:cache:{key}"
