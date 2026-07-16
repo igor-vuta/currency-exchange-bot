@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Dict, List, Tuple
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import Conflict
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler,
     ContextTypes, filters
@@ -456,7 +457,11 @@ async def finalize_conversion(q, context):
     await q.edit_message_text(f"```\n{msg}\n```", parse_mode="Markdown", reply_markup=main_menu_kb(context))
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logger.error("Unhandled exception: %s", context.error, exc_info=context.error)
+    error = context.error
+    if isinstance(error, Conflict):
+        logger.warning("Another bot instance is polling Telegram; will retry automatically.")
+        return
+    logger.error("Unhandled exception: %s", error, exc_info=error)
     if isinstance(update, Update) and update.effective_message:
         await update.effective_message.reply_text(tr(context, "generic_error"))
 
@@ -537,7 +542,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
     app.add_error_handler(error_handler)
     logger.info("Starting bot in polling mode")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
