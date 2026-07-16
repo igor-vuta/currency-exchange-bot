@@ -10,7 +10,7 @@ from telegram.ext import (
     ContextTypes, filters
 )
 
-from APIRate import table_for_base as api_table_for_base
+from APIRate import label as APIRate_label, table_for_base as api_table_for_base
 from config import BOT_TOKEN, CURRENCYLAYER_API_KEY, REDIS_URL, validate as validate_config
 from exceptions import ExchangeRateError
 from persistence import RedisPersistence
@@ -90,10 +90,47 @@ MESSAGES = {
         "unknown": "Пожалуйста, используйте кнопки ниже.",
         "rate_error": "Не удалось получить курсы. Попробуйте ещё раз через минуту.",
         "generic_error": "Что-то пошло не так. Попробуйте ещё раз."
+    },
+    "zh": {
+        "choose_lang": "选择语言：",
+        "choose_source": "选择数据源：",
+        "choose_base": "选择基础货币：",
+        "main_menu": "您想做什么？",
+        "source_web": "俄罗斯央行 (网页抓取)",
+        "source_api": "Currencylayer (API)",
+        "act_rate_all": "1 {base} → 全部",
+        "act_convert": "换算金额",
+        "settings": "设置",
+        "settings_title": "设置",
+        "set_lang": "语言",
+        "set_source": "数据源",
+        "set_base": "基础货币",
+        "back": "← 返回",
+        "rates_for": "1 {base} 的汇率：",
+        "sorting": "排序：",
+        "sort_code_asc": "代码 ↑",
+        "sort_code_desc": "代码 ↓",
+        "sort_name_asc": "名称 ↑",
+        "sort_name_desc": "名称 ↓",
+        "sort_rate_asc": "汇率 ↑",
+        "sort_rate_desc": "汇率 ↓",
+        "pick_target": "选择目标货币：",
+        "enter_amount": "输入金额（数字键盘）：",
+        "calc_result": "{amt} {base} = {res} {target}",
+        "lang_en": "English",
+        "lang_ru": "Русский",
+        "lang_zh": "中文",
+        "ok": "确定",
+        "clear": "清空",
+        "del": "⌫",
+        "page": "第 {n}/{tot} 页",
+        "unknown": "请使用下方按钮。",
+        "rate_error": "无法获取汇率，请稍后再试。",
+        "generic_error": "出错了，请稍后再试。"
     }
 }
 
-DEFAULT_LANG = "ru"
+DEFAULT_LANG = "en"
 
 def glang(context: ContextTypes.DEFAULT_TYPE) -> str:
     return context.user_data.get("lang", DEFAULT_LANG)
@@ -117,23 +154,26 @@ def get_source(context: ContextTypes.DEFAULT_TYPE) -> str:
 def get_base(context: ContextTypes.DEFAULT_TYPE) -> str:
     return context.user_data.get("base", None)
 
-def cbr_table_for_base(base_code: str) -> List[Tuple[float, str, str]]:
+def cbr_table_for_base(base_code: str, lang: str = DEFAULT_LANG) -> List[Tuple[float, str, str]]:
     data = get_exchange_rates()
     def rub_per(code: str) -> float:
-        definition, rate, amt = data[code]
+        _definition, rate, amt = data[code]
         return rate / float(amt)
     base_rub = rub_per(base_code)
     rows: List[Tuple[float, str, str]] = []
-    for code, (definition, rate, amt) in data.items():
+    for code, (_definition, rate, amt) in data.items():
         target_rub = rate / float(amt)
-        rows.append((base_rub / target_rub, code, definition))
-    rows = [(1.0, base_code, data[base_code][0]) if c==base_code else (v,c,n) for (v,c,n) in rows]
+        rows.append((base_rub / target_rub, code, APIRate_label(code, lang)))
+    rows = [(1.0, base_code, APIRate_label(base_code, lang)) if c==base_code else (v,c,n) for (v,c,n) in rows]
     rows.sort(key=lambda r: r[1])
     return rows
 
 def lang_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton(tr(context, "lang_en"), callback_data="lang:en"),
-                                 InlineKeyboardButton(tr(context, "lang_ru"), callback_data="lang:ru")]])
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(tr(context, "lang_en"), callback_data="lang:en")],
+        [InlineKeyboardButton(tr(context, "lang_ru"), callback_data="lang:ru")],
+        [InlineKeyboardButton(tr(context, "lang_zh"), callback_data="lang:zh")],
+    ])
 
 def source_kb(context: ContextTypes.DEFAULT_TYPE) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[InlineKeyboardButton(tr(context, "source_web"), callback_data="src:web")],
@@ -371,7 +411,8 @@ async def handle_noop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def get_rows_for_current(context: ContextTypes.DEFAULT_TYPE) -> List[Tuple[float,str,str]]:
     base = get_base(context)
     src = get_source(context)
-    return api_table_for_base(base) if src == "api" else cbr_table_for_base(base)
+    lang = glang(context)
+    return api_table_for_base(base, lang) if src == "api" else cbr_table_for_base(base, lang)
 
 async def show_all_rates(q, context, sort_key: str, asc: bool):
     base = get_base(context)
