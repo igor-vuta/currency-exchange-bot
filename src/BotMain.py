@@ -11,7 +11,7 @@ from telegram.ext import (
 )
 
 from APIRate import table_for_base as api_table_for_base
-from config import BOT_TOKEN, REDIS_URL
+from config import BOT_TOKEN, CURRENCYLAYER_API_KEY, REDIS_URL, validate as validate_config
 from exceptions import ExchangeRateError
 from persistence import RedisPersistence
 from WEBScrappa import get_exchange_rates
@@ -456,6 +456,13 @@ def build_application():
 
 def main():
     setup_logging()
+    logger.info(
+        "Environment check: BOT_TOKEN=%s, CURRENCYLAYER_API_KEY=%s, REDIS_URL=%s",
+        bool(BOT_TOKEN),
+        bool(CURRENCYLAYER_API_KEY),
+        bool(REDIS_URL),
+    )
+    validate_config()
     health_port = int(os.getenv("PORT", "8080"))
     start_health_server(port=health_port)
     app = build_application()
