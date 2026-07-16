@@ -350,15 +350,29 @@ async def handle_settings_base(update: Update, context: ContextTypes.DEFAULT_TYP
     await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
 
 
+async def _ensure_source_and_base(q, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not get_source(context):
+        await q.edit_message_text(tr(context, "choose_source"), reply_markup=source_kb(context))
+        return False
+    if not get_base(context):
+        await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
+        return False
+    return True
+
+
 async def handle_act_all(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = _query(update)
     await q.answer()
+    if not await _ensure_source_and_base(q, context):
+        return
     await show_all_rates(q, context, sort_key="code", asc=True)
 
 
 async def handle_act_convert(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = _query(update)
     await q.answer()
+    if not await _ensure_source_and_base(q, context):
+        return
     await q.edit_message_text(tr(context, "pick_target"), reply_markup=paged_codes_kb(context, "target", 0))
 
 
@@ -436,6 +450,9 @@ async def show_all_rates(q, context, sort_key: str, asc: bool):
 async def finalize_conversion(q, context):
     base = get_base(context)
     target = context.user_data.get("target")
+    if not base or not target:
+        await q.edit_message_text(tr(context, "choose_base"), reply_markup=paged_codes_kb(context, "base", 0))
+        return
     amount_str = context.user_data.get("calc_input") or "0"
     try:
         amt = float(amount_str)
