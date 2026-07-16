@@ -80,7 +80,7 @@ class RedisPersistence(BasePersistence[UD, CD, BD]):
         if self.store_data.bot_data:
             self._set_json(self._key("bot_data"), data)
 
-    async def refresh_bot_data(self, data: BD) -> None:
+    async def refresh_bot_data(self, bot_data: BD) -> None:
         pass
 
     async def drop_bot_data(self) -> None:
@@ -102,7 +102,7 @@ class RedisPersistence(BasePersistence[UD, CD, BD]):
             current[str(user_id)] = data
             self._set_json(key, current)
 
-    async def refresh_user_data(self, user_id: int, data: UD) -> None:
+    async def refresh_user_data(self, user_id: int, user_data: UD) -> None:
         pass
 
     async def drop_user_data(self, user_id: int) -> None:
@@ -124,7 +124,7 @@ class RedisPersistence(BasePersistence[UD, CD, BD]):
             current[str(chat_id)] = data
             self._set_json(key, current)
 
-    async def refresh_chat_data(self, chat_id: int, data: CD) -> None:
+    async def refresh_chat_data(self, chat_id: int, chat_data: CD) -> None:
         pass
 
     async def drop_chat_data(self, chat_id: int) -> None:
