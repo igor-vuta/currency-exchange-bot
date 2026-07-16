@@ -103,6 +103,16 @@ CURRENCYLAYER_API_KEY=YOUR_CURRENCYLAYER_API_KEY
 
 ---
 
+## 🖼 Screenshots
+
+<div align="center">
+  <img src="docs/screenshots/01-onboarding.png" width="30%" alt="Onboarding — language, source, base currency" />
+  <img src="docs/screenshots/02-table.png" width="30%" alt="Rates table — 1 BASE to all, sortable" />
+  <img src="docs/screenshots/03-calculator.png" width="30%" alt="Keypad calculator — convert amount" />
+</div>
+
+---
+
 ## 🔐 Notes
 
 - Rotate any previously exposed keys or tokens.
