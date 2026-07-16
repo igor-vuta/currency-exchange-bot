@@ -1,8 +1,16 @@
-import requests
+import logging
 from typing import Dict, List, Tuple
+
+import requests
+
+from cache import cached
 from config import CURRENCYLAYER_API_KEY
+from exceptions import ExchangeRateError
+
+logger = logging.getLogger(__name__)
 
 BASE_URL = "https://api.currencylayer.com/live"
+REQUEST_TIMEOUT = 15
 
 currency_names: Dict[str, str] = {
       "AED": "Дирхам ОАЭ",
@@ -177,12 +185,37 @@ currency_names: Dict[str, str] = {
     "ZWL": "Зимбабвийский доллар"
 }
 
+@cached("currencylayer:quotes")
 def fetch_usd_quotes() -> Dict[str, float]:
-    r = requests.get(BASE_URL, params={"access_key": CURRENCYLAYER_API_KEY}, timeout=10)
-    r.raise_for_status()
-    d = r.json()
+    logger.debug("Fetching currencylayer quotes")
+    try:
+        r = requests.get(
+            BASE_URL,
+            params={"access_key": CURRENCYLAYER_API_KEY},
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        logger.warning("currencylayer request failed: %s", exc)
+        raise ExchangeRateError("Не удалось связаться с API currencylayer.") from exc
+
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as exc:
+        logger.warning("currencylayer returned HTTP %s", r.status_code)
+        raise ExchangeRateError(f"API currencylayer вернул ошибку {r.status_code}.") from exc
+
+    try:
+        d = r.json()
+    except ValueError as exc:
+        logger.warning("currencylayer returned invalid JSON")
+        raise ExchangeRateError("API currencylayer вернул некорректный ответ.") from exc
+
     if not d.get("success"):
-        raise RuntimeError(d.get("error", {}).get("info"))
+        info = d.get("error", {}).get("info") or "unknown API error"
+        logger.warning("currencylayer API error: %s", info)
+        raise ExchangeRateError(f"Ошибка currencylayer: {info}")
+
+    logger.info("Loaded %s currencylayer quotes", len(d.get("quotes", {})))
     return d["quotes"]
 
 def derive_cross_rates(base_code: str) -> Dict[str, float]:

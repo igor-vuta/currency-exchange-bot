@@ -1,1 +1,6 @@
 .env
+.venv/
+__pycache__/
+*.pyc
+graphify-out/
+bot_state.pickle
