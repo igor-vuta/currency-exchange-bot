@@ -1,22 +1,36 @@
+<!-- project-presentation:start -->
+
+![Currency Exchange Bot — Button-driven Telegram currency rates and conversions](.github/readme-header.svg)
+
+**[Open bot](https://t.me/currenvy_bot_for_demo_bot)** · [Repository activity](https://github.com/igor-vuta/currency-exchange-bot/activity)
+
+[![Last commit](https://img.shields.io/github/last-commit/igor-vuta/currency-exchange-bot?style=flat-square&color=6366f1)](https://github.com/igor-vuta/currency-exchange-bot/commits)
+[![Repository size](https://img.shields.io/github/repo-size/igor-vuta/currency-exchange-bot?style=flat-square&color=6366f1)](https://github.com/igor-vuta/currency-exchange-bot)
+
+**3** Interface languages · **2** Rate sources · **3** UI screenshots
+
+*Project facts checked 2 October 2026. Activity badges update from GitHub.*
+
+<!-- project-presentation:end -->
+
 <div align="center">
 
 # 🤖 Currency Exchange Bot
 
-**A button-only Telegram bot for live currency rates and conversions — no typing, no commands to memorise.**
+**A Telegram bot for currency rates and conversions, with button-driven setup and an inline calculator.**
 
-<img src="https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white" />
+<img src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white" />
 <img src="https://img.shields.io/badge/python--telegram--bot-persistence-2CA5E0?logo=telegram&logoColor=white" />
 <img src="https://img.shields.io/badge/Scraping-BeautifulSoup4-1f6feb" />
 <img src="https://img.shields.io/badge/API-currencylayer-000000" />
-<img src="https://img.shields.io/badge/Deploy-Heroku%20|%20Railway%20|%20Render-purple" />
 
 <br />
 
-### ⚡ Try it right now — no setup
+### Open in Telegram
 
 [![Open in Telegram](https://img.shields.io/badge/%F0%9F%9A%80%20Live%20demo-@currenvy__bot__for__demo__bot-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white)](https://t.me/currenvy_bot_for_demo_bot)
 
-*Press Start, pick a language, and you're converting currencies in under 15 seconds.*
+*The link opens the bot profile; availability and response time depend on the running bot and its rate providers.*
 
 </div>
 
@@ -24,10 +38,10 @@
 
 ## What it does
 
-New users walk through a friendly onboarding: **language → data source → base currency**, then land in a two-button main menu:
+New users walk through **language → data source → base currency**, then reach the rates and conversion actions:
 
 - **1 BASE → all** — a clean, monospace-aligned table of your base currency against every other, sortable by code, name, or rate.
-- **Convert amount** — pick a target currency and enter the amount on an inline numeric keypad. No free-text input anywhere.
+- **Convert amount** — pick a target currency and enter the amount on an inline numeric keypad.
 
 ```
 ┌──────────────────────────────┐
@@ -43,19 +57,19 @@ New users walk through a friendly onboarding: **language → data source → bas
 └──────────────────────────────┘
 ```
 
-Everything is **persistent**: language, data source (CBR / currencylayer API), and base currency survive bot restarts and are editable any time in Settings.
+Language, data source (CBR / currencylayer API), and base currency are editable in Settings. Configure Redis to keep user preferences across process restarts; without `REDIS_URL`, persistence is in memory only.
 
 ---
 
 ## ✨ Highlights
 
-- 🧭 **Zero-typing UX** — the entire flow runs on inline buttons, including a numeric keypad calculator
-- 🌍 **Multilingual** — English / Russian interface, switchable on the fly
+- 🧭 **Button-driven UX** — setup, sorting, settings, and conversion use inline buttons and a numeric keypad
+- 🌍 **Multilingual** — English, Russian, and Chinese interfaces, switchable in Settings
 - 🔀 **Dual data sources** — Central Bank of Russia (scraped with BeautifulSoup) or currencylayer API cross-rates, user's choice
 - 📊 **Readable tables** — aligned monospace output with sorting (code / name / rate)
-- 💾 **Persistence** — user preferences stored via `PicklePersistence`, no database required
+- 💾 **Optional Redis persistence** — user preferences survive restarts when `REDIS_URL` is configured; otherwise they remain in memory
 - 🔐 **Secure config** — secrets in `.env` (`BOT_TOKEN`, `CURRENCYLAYER_API_KEY`), never in code
-- 🚀 **Deploy anywhere** — Heroku / Railway / Render / any VPS; `Procfile` included
+- 🚀 **Polling process with health endpoint** — `/health` listens on `PORT` (default `8080`); `Procfile` is included for compatible hosts
 
 ---
 
@@ -67,6 +81,7 @@ src/
   BotMain.py     # button-only flow, i18n, persistence, keypad calculator
   WEBScrappa.py  # CBR rates via BeautifulSoup
   config.py      # loads secrets from .env
+  persistence.py # Redis or in-memory preference storage
 requirements.txt
 Procfile | runtime.txt   # optional, for Heroku-style deploys
 ```
@@ -76,10 +91,10 @@ Procfile | runtime.txt   # optional, for Heroku-style deploys
 ## ⚙️ Run your own instance
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv venv
+uv pip install -r requirements.txt
 cp .env.example .env   # fill in your tokens
-python src/BotMain.py
+uv run --no-project python src/BotMain.py
 ```
 
 `.env`:
@@ -87,13 +102,15 @@ python src/BotMain.py
 ```env
 BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN
 CURRENCYLAYER_API_KEY=YOUR_CURRENCYLAYER_API_KEY
+# Optional: Redis for preferences that survive restarts
+REDIS_URL=redis://localhost:6379/0
 ```
 
 ---
 
 ## 🧪 The flow
 
-1. `/start` → choose language
+1. `/start` → choose English, Russian, or Chinese
 2. Choose source: **CBR** or **currencylayer**
 3. Choose base currency (paginated list)
 4. Main menu:
@@ -126,8 +143,8 @@ CURRENCYLAYER_API_KEY=YOUR_CURRENCYLAYER_API_KEY
 [GNU Affero General Public License v3 (AGPLv3)](https://www.gnu.org/licenses/agpl-3.0.html)
 
 - ✅ Share and showcase code freely.
-- ✅ Others may learn and contribute.
-- ❌ No one can take it private, build a SaaS on top, and profit without open-sourcing their changes.
+- ✅ Others may learn and contribute under the license terms.
+- 📖 Network service operators must make the corresponding source available to users as required by AGPLv3.
 
 ---
 
