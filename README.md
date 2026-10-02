@@ -13,6 +13,12 @@
 
 <!-- project-presentation:end -->
 
+<!-- project-pattern:start -->
+
+![Two opposing exchange arrows beside a coin marked with a dollar sign.](.github/project-pattern.svg)
+
+<!-- project-pattern:end -->
+
 <div align="center">
 
 # 🤖 Currency Exchange Bot
